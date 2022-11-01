@@ -145,13 +145,13 @@ for (i = 0; i < n; i++) {
 	setResult("slice_end",i, slEnd);
 	setResult("neurite_id",i, "JN_"+i);					// ROI ID is saved based on index
 	setResult("linewidth",i, linewidth);
+	updateResults();
 	
 	// Setup filename based on ROI ID 
 	fnJN = fnBase+".JN_"+i;
     
     // Iterate through the channels and create .tifs for each
     for (j = 0; j < channels; j++) {
-    	
     	// Create and save straightened neurite view for active channel
     	selectWindow("C"+toString(j+1)+"-"+fnMP+".tif");
     	roiManager('select', i);
@@ -160,6 +160,8 @@ for (i = 0; i < n; i++) {
     	cMean = getValue("Mean");										// This returns the mean grey value for the entire trace
     	saveAs("Tiff",dirJNs+fnJN+".C_"+toString(j+1)+".tif");
     	close();
+    	
+    	
     	
 		// Store the grey value in the right column based on active channel
 		if (j==0) {
@@ -174,9 +176,24 @@ for (i = 0; i < n; i++) {
     	selectWindow("C"+toString(j+1)+"-"+fnMP+".tif");
     	roiManager('select', i);
     	run("Plot Profile");
+    	Plot.getValues(xpoints, ypoints);
+    	
+    	// Store the x and y values from the plot
+    	if (j==0) {
+    		ysOne = ypoints;							// Only need to save ypoints for C1 here b/c C2 vals are stored when loop ends
+    	}
     	saveAs("Tiff",dirPTs+fnPL+".JN_"+i+".C"+toString(j+1)+".tif");
     }
     
+    // Calculate the average pixel-wise ratio of C2/C1 along the neurite
+    ratios = newArray(lengthOf(xpoints));
+    sum = 0;
+    for (k = 0; k < lengthOf(xpoints); k++) {
+    	ratios[k] = ysOne[k]/ypoints[k];
+    	sum = sum + ratios[k];
+    }
+    Array.getStatistics(ratios, min, max, mean, std);
+
     // Combine the two plots for the channels
     selectWindow(fnPL+".JN_"+i+".C2.tif");
     Plot.setStyle(0, "red,none,3.0,Line");
@@ -195,13 +212,12 @@ for (i = 0; i < n; i++) {
 	}
     Plot.setLimits(xMin, xMax, 0, yMax);
     
+    
     // Make and save a high resolution version of the plots
-	Plot.makeHighResolution("Plot of MAX_PA_001.05.01.03.Zs.3C-1.png_HiRes",4.0);
+	//Plot.makeHighResolution("Plot of MAX_PA_001.05.01.03.Zs.3C-1.png_HiRes",4.0);
     saveAs("Tiff",dirPTs+fnPL+".JN_"+i+".C1a2.tif");
     
     // Close plots
-    close();
-    selectWindow(fnPL+".JN_"+i+".C1.tif");
     close();
     selectWindow(fnPL+".JN_"+i+".C2.tif");
     close();
@@ -212,6 +228,10 @@ for (i = 0; i < n; i++) {
 	setResult("channels",i,cJN);
 	setResult("slices",i,sJN);
 	setResult("frames",i,fJN);
+	setResult("ratio_avg",i,mean);
+	setResult("ratio_min",i,min);
+	setResult("ratio_max",i,max);
+	setResult("ratio_std",i,std);
 }
 // Save all of the ROIs in one zip file that can be reopened using the ROI manager
 roiManager("save", dirROIs+fnROIs);
@@ -244,34 +264,6 @@ function getTimeStamp(){
 	return strDateTime;
 }
 
-function setupMD(fPath){
-// FX Reads in csv file and setsup info as a Results table
-//    In particular, reads in CCP_###.MetaD.NS_##.##.csv
-	lineseparator = "\n";
-	cellseparator = ",\t";
-
-	// copies the whole RT to an array of lines
-	lines=split(File.openAsString(fPath), lineseparator);
-
-	// recreates the columns headers
-	labels=split(lines[0], cellseparator);
-	if (labels[0]==" "){
-		k=1; // it is an ImageJ Results table, skip first column
-	}else{
-	k=0; // it is not a Results table, load all columns
-	}
-	for (j=k; j<labels.length; j++)
-		setResult(labels[j],0,0);
-		// dispatches the data into the new RT
-	run("Clear Results");
-	for (i=1; i<lines.length; i++) {
-		items=split(lines[i], cellseparator);
-	for (j=k; j<items.length; j++)
-   		setResult(labels[j],i-1,items[j]);
-	}
-	updateResults();
-}
-
 function initResTable(fPathMD){
 // FUNCTION RUNS IF THIS IS THE FIRST TIME SETTING UP DIRECTORIES
 
@@ -290,6 +282,10 @@ function initResTable(fPathMD){
 	setResult("frames",0,'TBD');
 	setResult("c1_grey",0,'TBD');
 	setResult("c2_grey",0,'TBD');
+	setResult("ratio_avg",0,'TBD');
+	setResult("ratio_min",0,'TBD');
+	setResult("ratio_max",0,'TBD');
+	setResult("ratio_std",0,'TBD');
 	updateResults();
 		
 	// Immediately create a saved copy of the MD file
